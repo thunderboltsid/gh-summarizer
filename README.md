@@ -16,17 +16,28 @@ make build
 ```
 
 ## Usage
-Basic usage
+### Basic usage
 ```bash
 gh-summarizer --username=thunderboltsid
 ```
 
-Usage with a custom GitHub token
+### Usage with a custom GitHub token
 ```bash
 gh-summarizer --username=thunderboltsid --token=ghp_123
 ```
 
-Usage with combined flags
+### Usage with combined flags
 ```bash
-h-summarizer --username=thunderboltsid --exclude-private-repos --exclude-forks --contributions-since=2024-01-01T00:00:00Z --token=ghp_123 --csv
+gh-summarizer --username=thunderboltsid --exclude-private-repos --exclude-forks --contributions-since=2024-01-01T00:00:00Z --token=ghp_123 --csv
 ```
+
+### Available Options
+
+* --username: GitHub username (required)
+* --token: GitHub API token (recommended for higher rate limits)
+* --exclude-private-repos: Exclude private repositories
+* --exclude-public-repos: Exclude public repositories
+* --exclude-user-owned-repos: Exclude repositories owned by the user
+* --exclude-forks: Exclude forked repositories
+* --contributions-since: Only include repos with contributions since timestamp (RFC3339 format)
+* --csv: Output results in CSV format
