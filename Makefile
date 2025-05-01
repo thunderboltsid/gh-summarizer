@@ -1,5 +1,5 @@
 # Variables
-BINARY_NAME=gh-contribution-summarizer
+BINARY_NAME=gh-summarizer
 BINARY_DIR=bin
 GO=go
 GOFLAGS=-ldflags="-s -w"

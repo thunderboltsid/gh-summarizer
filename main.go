@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -23,14 +24,24 @@ type IssueSearchResult struct {
 type Repository struct {
 	FullName string
 	Private  bool
+	Owner    string
 }
 
 var (
 	// Command line flags
-	username       string
-	token          string
-	excludePrivate bool
-	excludePublic  bool
+	username         string
+	token            string
+	excludePrivate   bool
+	excludePublic    bool
+	excludeUserOwned bool
+	version          string = "0.1.0"
+)
+
+// Version information - will be set by the build process
+var (
+	Version   string
+	GitCommit string
+	BuildDate string
 )
 
 func main() {
@@ -59,6 +70,7 @@ a GitHub user has contributed to, including:
 			// Execute the main functionality
 			findContributions()
 		},
+		Version: version,
 	}
 
 	// Add flags
@@ -66,6 +78,7 @@ a GitHub user has contributed to, including:
 	rootCmd.Flags().StringVar(&token, "token", "", "GitHub API token (optional, but recommended)")
 	rootCmd.Flags().BoolVar(&excludePrivate, "exclude-private-repos", false, "Exclude private repositories")
 	rootCmd.Flags().BoolVar(&excludePublic, "exclude-public-repos", false, "Exclude public repositories")
+	rootCmd.Flags().BoolVar(&excludeUserOwned, "exclude-user-owned-repos", false, "Exclude repositories owned by the user")
 
 	// Make username required
 	rootCmd.MarkFlagRequired("username")
@@ -114,7 +127,7 @@ func findContributions() {
 	}
 
 	// Print all repositories, applying filters
-	printRepos(repoMap, excludePrivate, excludePublic)
+	printRepos(repoMap, excludePrivate, excludePublic, excludeUserOwned, username)
 }
 
 // Fetch user's own repositories
@@ -145,6 +158,16 @@ func getUserRepos(username, token string, repoMap map[string]*Repository, mu *sy
 					continue
 				}
 
+				// Extract owner information
+				owner := ""
+				ownerInfo, ok := repo["owner"].(map[string]interface{})
+				if ok {
+					ownerLogin, ok := ownerInfo["login"].(string)
+					if ok {
+						owner = ownerLogin
+					}
+				}
+
 				// Extract private status if available
 				isPrivate, ok := repo["private"].(bool)
 
@@ -153,6 +176,7 @@ func getUserRepos(username, token string, repoMap map[string]*Repository, mu *sy
 					repoMap[fullName] = &Repository{
 						FullName: fullName,
 						Private:  ok && isPrivate,
+						Owner:    owner,
 					}
 				}
 				mu.Unlock()
@@ -201,6 +225,7 @@ func getIssueRepos(username, token string, repoMap map[string]*Repository, mu *s
 					repoMap[fullName] = &Repository{
 						FullName: fullName,
 						Private:  false, // Will be checked later if needed
+						Owner:    repoOwner,
 					}
 				}
 				mu.Unlock()
@@ -253,6 +278,7 @@ func getPRRepos(username, token string, repoMap map[string]*Repository, mu *sync
 					repoMap[fullName] = &Repository{
 						FullName: fullName,
 						Private:  false, // Will be checked later if needed
+						Owner:    repoOwner,
 					}
 				}
 				mu.Unlock()
@@ -335,9 +361,9 @@ func fetchGithubAPI(url, token string) (string, error) {
 		rateLimitRemaining := resp.Header.Get("X-RateLimit-Remaining")
 		if rateLimitRemaining == "0" {
 			resetTime := resp.Header.Get("X-RateLimit-Reset")
-			resetTimeInt, err := time.Parse(time.RFC3339, resetTime)
-			if err == nil {
-				waitTime := time.Until(resetTimeInt)
+			resetTimeInt, parseErr := strconv.ParseInt(resetTime, 10, 64)
+			if parseErr == nil {
+				waitTime := time.Until(time.Unix(resetTimeInt, 0))
 				fmt.Fprintf(os.Stderr, "Rate limit exceeded. Waiting for %v...\n", waitTime)
 				time.Sleep(waitTime)
 				return fetchGithubAPI(url, token) // Retry after waiting
@@ -358,7 +384,7 @@ func fetchGithubAPI(url, token string) (string, error) {
 }
 
 // Print repositories, applying filters
-func printRepos(repoMap map[string]*Repository, excludePrivate, excludePublic bool) {
+func printRepos(repoMap map[string]*Repository, excludePrivate, excludePublic, excludeUserOwned bool, username string) {
 	// Convert map to slice for potential sorting
 	repos := make([]string, 0, len(repoMap))
 	for fullName, repo := range repoMap {
@@ -366,6 +392,12 @@ func printRepos(repoMap map[string]*Repository, excludePrivate, excludePublic bo
 		if (excludePrivate && repo.Private) || (excludePublic && !repo.Private) {
 			continue
 		}
+
+		// Apply user ownership filter
+		if excludeUserOwned && strings.EqualFold(repo.Owner, username) {
+			continue
+		}
+
 		repos = append(repos, fullName)
 	}
 
