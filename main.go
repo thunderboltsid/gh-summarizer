@@ -40,6 +40,7 @@ var (
 	excludeUserOwned   bool
 	excludeForks       bool
 	contributionsSince string
+	outputCSV          bool
 	version            string = "0.1.0"
 )
 
@@ -99,6 +100,7 @@ a GitHub user has contributed to, including:
 	rootCmd.Flags().BoolVar(&excludeUserOwned, "exclude-user-owned-repos", false, "Exclude repositories owned by the user")
 	rootCmd.Flags().BoolVar(&excludeForks, "exclude-forks", false, "Exclude forked repositories")
 	rootCmd.Flags().StringVar(&contributionsSince, "contributions-since", "", "Only include repositories with contributions since timestamp (RFC3339 format, e.g., '2023-01-01T00:00:00Z')")
+	rootCmd.Flags().BoolVar(&outputCSV, "csv", false, "Output results in CSV format with spaces after commas")
 
 	// Make username required
 	rootCmd.MarkFlagRequired("username")
@@ -150,7 +152,7 @@ func findContributions(sinceTime time.Time) {
 	}
 
 	// Print all repositories, applying filters
-	printRepos(repoMap, excludePrivate, excludePublic, excludeUserOwned, excludeForks, username, sinceTime)
+	printRepos(repoMap, excludePrivate, excludePublic, excludeUserOwned, excludeForks, username, sinceTime, outputCSV)
 }
 
 // Fetch user's own repositories
@@ -519,7 +521,7 @@ func fetchGithubAPI(url, token string) (string, error) {
 }
 
 // Print repositories, applying filters
-func printRepos(repoMap map[string]*Repository, excludePrivate, excludePublic, excludeUserOwned, excludeForks bool, username string, sinceTime time.Time) {
+func printRepos(repoMap map[string]*Repository, excludePrivate, excludePublic, excludeUserOwned, excludeForks bool, username string, sinceTime time.Time, outputCSV bool) {
 	// Convert map to slice for potential sorting
 	repos := make([]string, 0, len(repoMap))
 	for fullName, repo := range repoMap {
@@ -548,6 +550,12 @@ func printRepos(repoMap map[string]*Repository, excludePrivate, excludePublic, e
 
 	// Print each repository
 	for _, repo := range repos {
-		fmt.Println(repo)
+		if outputCSV {
+			// Format as CSV with spaces after commas
+			// Since repository names don't contain commas, no need for escaping
+			fmt.Printf("%s, ", repo)
+		} else {
+			fmt.Println(repo)
+		}
 	}
 }
